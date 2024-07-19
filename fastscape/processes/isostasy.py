@@ -21,12 +21,11 @@ class BaseIsostasy:
     :func:`xsimlab.foreign`.
 
     """
-
     rebound = xs.variable(
-        dims=("y", "x"),
-        intent="out",
-        groups=["bedrock_upward", "surface_upward"],
-        description="isostasic rebound due to material loading/unloading",
+        dims=('y', 'x'),
+        intent='out',
+        groups=['bedrock_upward', 'surface_upward'],
+        description='isostasic rebound due to material loading/unloading'
     )
 
 
@@ -42,15 +41,14 @@ class BaseLocalIsostasy(BaseIsostasy):
     :func:`xsimlab.foreign`.
 
     """
-
-    i_coef = xs.variable(description="local isostatic coefficient")
+    i_coef = xs.variable(description='local isostatic coefficient')
 
 
 @xs.process
 class LocalIsostasyErosion(BaseLocalIsostasy):
     """Local isostasic effect of erosion."""
 
-    erosion = xs.foreign(TotalErosion, "height")
+    erosion = xs.foreign(TotalErosion, 'height')
 
     def run_step(self):
         self.rebound = self.i_coef * self.erosion
@@ -60,10 +58,10 @@ class LocalIsostasyErosion(BaseLocalIsostasy):
 class LocalIsostasyTectonics(BaseLocalIsostasy):
     """Local isostasic effect of tectonic forcing."""
 
-    bedrock_upward = xs.foreign(TectonicForcing, "bedrock_upward")
+    bedrock_upward = xs.foreign(TectonicForcing, 'bedrock_upward')
 
     def run_step(self):
-        self.rebound = -1.0 * self.i_coef * self.bedrock_upward
+        self.rebound = -1. * self.i_coef * self.bedrock_upward
 
 
 @xs.process
@@ -74,9 +72,8 @@ class LocalIsostasyErosionTectonics(BaseLocalIsostasy):
     the density of eroded material (one single coefficient is used).
 
     """
-
-    erosion = xs.foreign(TotalErosion, "height")
-    surface_upward = xs.foreign(TectonicForcing, "surface_upward")
+    erosion = xs.foreign(TotalErosion, 'height')
+    surface_upward = xs.foreign(TectonicForcing, 'surface_upward')
 
     def run_step(self):
         self.rebound = self.i_coef * (self.erosion - self.surface_upward)
@@ -88,26 +85,33 @@ class Flexure(BaseIsostasy):
     forcing.
 
     """
+    lithos_density = xs.variable(
+        dims=[(), ('y', 'x')],
+        description='lithospheric rock density'
+    )
+    asthen_density = xs.variable(
+        description='asthenospheric rock density'
+    )
+    e_thickness = xs.variable(
+        description='effective elastic plate thickness'
+    )
 
-    lithos_density = xs.variable(dims=[(), ("y", "x")], description="lithospheric rock density")
-    asthen_density = xs.variable(description="asthenospheric rock density")
-    e_thickness = xs.variable(description="effective elastic plate thickness")
+    shape = xs.foreign(UniformRectilinearGrid2D, 'shape')
+    length = xs.foreign(UniformRectilinearGrid2D, 'length')
 
-    shape = xs.foreign(UniformRectilinearGrid2D, "shape")
-    length = xs.foreign(UniformRectilinearGrid2D, "length")
+    ibc = xs.foreign(BorderBoundary, 'ibc')
 
-    ibc = xs.foreign(BorderBoundary, "ibc")
+    elevation = xs.foreign(SurfaceTopography, 'elevation')
 
-    elevation = xs.foreign(SurfaceTopography, "elevation")
-
-    erosion = xs.foreign(TotalErosion, "height")
-    surface_upward = xs.foreign(TectonicForcing, "surface_upward")
+    erosion = xs.foreign(TotalErosion, 'height')
+    surface_upward = xs.foreign(TectonicForcing, 'surface_upward')
 
     def run_step(self):
         ny, nx = self.shape
         yl, xl = self.length
 
-        lithos_density = np.broadcast_to(self.lithos_density, self.shape).flatten()
+        lithos_density = np.broadcast_to(
+            self.lithos_density, self.shape).flatten()
 
         elevation_eq = self.elevation.flatten()
         diff = (self.surface_upward - self.erosion).ravel()
@@ -116,17 +120,8 @@ class Flexure(BaseIsostasy):
         elevation_pre = elevation_eq + diff
         elevation_post = elevation_pre.copy()
 
-        fs.flexure(
-            elevation_post,
-            elevation_eq,
-            nx,
-            ny,
-            xl,
-            yl,
-            lithos_density,
-            self.asthen_density,
-            self.e_thickness,
-            self.ibc,
-        )
+        fs.flexure(elevation_post, elevation_eq, nx, ny, xl, yl,
+                   lithos_density, self.asthen_density, self.e_thickness,
+                   self.ibc)
 
         self.rebound = (elevation_post - elevation_pre).reshape(self.shape)
